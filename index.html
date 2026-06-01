@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#08111f" />
+  <meta name="description" content="Skillio ist eine modulare Premium-Lernapp für Change Management und Data Mesh." />
+  <title>Skillio · Change Management Lernapp</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <div class="ambient a1" aria-hidden="true"></div><div class="ambient a2" aria-hidden="true"></div>
+  <div class="app-shell">
+    <header class="topbar glass">
+      <a class="brand" href="#dashboard" data-route="dashboard" aria-label="Skillio Dashboard"><span class="mark">S</span><span><strong>Skillio</strong><small>Enterprise Learning OS</small></span></a>
+      <nav class="nav" aria-label="Hauptnavigation">
+        <button data-route="dashboard" class="active">Dashboard</button><button data-route="learn">Lernen</button><button data-route="practice">Training</button><button data-route="coach">Coach</button><button data-route="profile">Fortschritt</button>
+      </nav>
+      <div class="top-actions"><button id="themeToggle" class="icon" type="button" aria-label="Theme wechseln">◐</button><button id="syncButton" class="pill secondary" type="button">Sync</button></div>
+    </header>
+    <main id="app" class="content" tabindex="-1"></main>
+  </div>
+  <nav class="bottom glass" aria-label="Mobile Navigation">
+    <button data-route="dashboard" class="active"><span>⌂</span>Home</button><button data-route="learn"><span>▤</span>Lernen</button><button data-route="practice"><span>✦</span>Training</button><button data-route="coach"><span>◆</span>Coach</button><button data-route="profile"><span>◉</span>Profil</button>
+  </nav>
+  <script src="supabase-config.example.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
