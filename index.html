@@ -17,15 +17,16 @@
     <header class="topbar glass">
       <a class="brand" href="#dashboard" data-route="dashboard" aria-label="Skillio Dashboard"><span class="mark">S</span><span><strong>Skillio</strong><small>Enterprise Learning OS</small></span></a>
       <nav class="nav" aria-label="Hauptnavigation">
-        <button data-route="dashboard" class="active">Dashboard</button><button data-route="learn">Lernen</button><button data-route="practice">Training</button><button data-route="coach">Coach</button><button data-route="profile">Fortschritt</button>
+        <button data-route="dashboard" class="active">Dashboard</button><button data-route="learn">Curriculum</button><button data-route="practice">Training</button><button data-route="coach">Coach</button><button data-route="profile">DB & Profil</button>
       </nav>
-      <div class="top-actions"><button id="themeToggle" class="icon" type="button" aria-label="Theme wechseln">◐</button><button id="syncButton" class="pill secondary" type="button">Sync</button></div>
+      <div class="top-actions"><button id="themeToggle" class="icon" type="button" aria-label="Theme wechseln">◐</button><button id="syncButton" class="pill secondary" type="button">DB Sync</button></div>
     </header>
     <main id="app" class="content" tabindex="-1"></main>
   </div>
   <nav class="bottom glass" aria-label="Mobile Navigation">
-    <button data-route="dashboard" class="active"><span>⌂</span>Home</button><button data-route="learn"><span>▤</span>Lernen</button><button data-route="practice"><span>✦</span>Training</button><button data-route="coach"><span>◆</span>Coach</button><button data-route="profile"><span>◉</span>Profil</button>
+    <button data-route="dashboard" class="active"><span>⌂</span>Home</button><button data-route="learn"><span>▤</span>Lernen</button><button data-route="practice"><span>✦</span>Training</button><button data-route="coach"><span>◆</span>Coach</button><button data-route="profile"><span>◉</span>DB</button>
   </nav>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.example.js"></script>
   <script src="app.js"></script>
 </body>
