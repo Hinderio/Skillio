@@ -1,3 +1,27 @@
+#app:has(.learn + .panel) {
+  grid-template-columns: 310px minmax(0, 1fr);
+  align-items: start;
+}
+
+#app:has(.learn + .panel) > .learn {
+  display: contents;
+}
+
+#app:has(.learn + .panel) > .learn > .side {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+#app:has(.learn + .panel) > .learn > .lesson {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+#app:has(.learn + .panel) > .learn + .panel {
+  grid-column: 2;
+  grid-row: 2;
+}
+
 details.study-card {
   display: grid;
   gap: 14px;
@@ -41,6 +65,21 @@ details.study-card p {
 }
 
 @media (max-width: 920px) {
+  #app:has(.learn + .panel) {
+    grid-template-columns: 1fr;
+  }
+
+  #app:has(.learn + .panel) > .learn {
+    display: grid;
+  }
+
+  #app:has(.learn + .panel) > .learn > .side,
+  #app:has(.learn + .panel) > .learn > .lesson,
+  #app:has(.learn + .panel) > .learn + .panel {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
   details.study-card > summary strong {
     font-size: 1.12rem;
   }
