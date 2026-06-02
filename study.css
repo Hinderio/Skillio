@@ -1,0 +1,46 @@
+details.study-card {
+  display: grid;
+  gap: 14px;
+}
+
+details.study-card > summary {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  cursor: default;
+}
+
+details.study-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.study-card > summary strong {
+  display: block;
+  font-size: 1.35rem;
+  line-height: 1.28;
+  letter-spacing: -0.035em;
+}
+
+details.study-card > :not(summary) {
+  display: block;
+}
+
+details.study-card .meta {
+  margin-top: 8px;
+}
+
+details.study-card .choices {
+  margin-top: 12px;
+}
+
+details.study-card p {
+  margin-top: 12px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+@media (max-width: 920px) {
+  details.study-card > summary strong {
+    font-size: 1.12rem;
+  }
+}
