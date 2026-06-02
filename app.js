@@ -11,7 +11,7 @@
 
   try { state = { ...state, ...JSON.parse(sessionStorage.getItem(KEY) || '{}') }; } catch { sessionStorage.removeItem(KEY); }
   const hash = location.hash.replace('#', '');
-  if (['dashboard', 'topics', 'topic', 'lesson', 'quiz', 'result', 'profile'].includes(hash)) state.route = hash;
+  if (['dashboard', 'topics', 'topic', 'lesson', 'quiz', 'result', 'solutions', 'profile'].includes(hash)) state.route = hash;
 
   const save = () => sessionStorage.setItem(KEY, JSON.stringify(state));
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -202,14 +202,27 @@
       render();
       return;
     }
-    const details = list.map((q, i) => ({ correct: q.a === state.quiz.answers[i], question: q.q, recommendation: q.ex }));
+    const details = list.map((q, i) => {
+      const selectedIndex = state.quiz.answers[i];
+      return {
+        id: q.id,
+        correct: q.a === selectedIndex,
+        question: q.q,
+        options: q.o,
+        selectedIndex,
+        correctIndex: q.a,
+        selectedAnswer: selectedIndex === undefined ? 'Keine Antwort' : q.o[selectedIndex],
+        correctAnswer: q.o[q.a],
+        recommendation: q.ex
+      };
+    });
     const score = details.filter((item) => item.correct).length;
     const percentage = Math.round(score / list.length * 100);
     state.xp += score * 12 + (percentage >= 80 ? 30 : 0);
     state.level = Math.floor(state.xp / 250) + 1;
     state.streak = Math.max(1, state.streak);
-    state.result = { topic: state.quiz.topic, score, total: list.length, percentage, details };
-    state.attempts.unshift({ topic: state.quiz.topic, percentage, score, total: list.length, date: new Date().toISOString() });
+    state.result = { topic: state.quiz.topic, score, total: list.length, percentage, details, completedAt: new Date().toISOString() };
+    state.attempts.unshift({ topic: state.quiz.topic, percentage, score, total: list.length, date: state.result.completedAt });
     state.quiz = null;
     save();
     go('result');
@@ -247,7 +260,7 @@
     if (!topic) return dashboard();
     const st = stats(topic.id);
     const mods = modules(topic.id);
-    return `<section class="panel"><div class="head"><div><p class="eyebrow">Themen-Detailseite</p><h2>${esc(topic.title)}</h2><p class="lead">${esc(topic.desc)}</p></div><div class="badges"><span class="badge info">${st.progress}% Fortschritt</span><span class="badge">${st.questions} Fragen</span></div></div><div class="progress"><i style="width:${st.progress}%"></i></div><div class="actions"><button class="btn primary" data-start="${esc(topic.id)}">Lektion starten</button><button class="btn secondary" data-quiz="${esc(topic.id)}">Quiz starten</button></div></section><section class="panel"><div class="head"><div><p class="eyebrow">Module aus Supabase</p><h2>Lernstruktur</h2></div></div><div class="grid">${mods.map((m) => `<article class="module"><div><h3>${esc(m.title)}</h3><p>${esc(m.desc)}</p><small>${m.count} Lerneinheit${m.count === 1 ? '' : 'en'}</small></div><button class="btn secondary" data-lesson="${esc(m.firstLesson)}">Öffnen</button></article>`).join('')}</div></section>`;
+    return `<section class="panel"><div class="head"><div><p class="eyebrow">Themen-Detailseite</p><h2>${esc(topic.title)}</h2><p class="lead">${esc(topic.desc)}</p></div><div class="badges"><span class="badge info">${st.progress}% Fortschritt</span><span class="badge">${st.questions} Fragen</span></div></div><div class="progress"><i style="width:${st.progress}%"></i></div><div class="actions"><button class="btn primary" data-start="${esc(topic.id)}">Lektion starten</button><button class="btn secondary" data-quiz="${esc(topic.id)}">Quiz starten</button>${state.result?.topic === topic.id ? `<button class="btn secondary" data-route="solutions">Letzte Lösungen</button>` : ''}</div></section><section class="panel"><div class="head"><div><p class="eyebrow">Module aus Supabase</p><h2>Lernstruktur</h2></div></div><div class="grid">${mods.map((m) => `<article class="module"><div><h3>${esc(m.title)}</h3><p>${esc(m.desc)}</p><small>${m.count} Lerneinheit${m.count === 1 ? '' : 'en'}</small></div><button class="btn secondary" data-lesson="${esc(m.firstLesson)}">Öffnen</button></article>`).join('')}</div></section>`;
   }
 
   function lessonView() {
@@ -270,16 +283,23 @@
     const r = state.result;
     if (!r) return '<section class="empty">Noch kein Ergebnis vorhanden.</section>';
     const topic = by(tList(), r.topic);
-    return `<section class="panel result"><p class="eyebrow">Quiz Ergebnis</p><h1>${r.percentage}%</h1><p class="lead">${esc(topic?.title || 'Thema')} · ${r.score}/${r.total} richtig</p><div class="progress"><i style="width:${r.percentage}%"></i></div><div class="actions"><button class="btn primary" data-quiz="${esc(r.topic)}">Neues Quiz</button><button class="btn secondary" data-topic="${esc(r.topic)}">Zum Thema</button></div></section><section class="panel"><div class="head"><div><p class="eyebrow">Feedback</p><h2>Wiederholungsempfehlungen</h2></div></div><div class="grid">${r.details.map((item) => `<article class="card"><span class="badge ${item.correct ? 'ok' : 'warn'}">${item.correct ? 'Richtig' : 'Wiederholen'}</span><h3>${esc(item.question)}</h3><p>${esc(item.recommendation)}</p></article>`).join('')}</div></section>`;
+    return `<section class="panel result"><p class="eyebrow">Quiz Ergebnis</p><h1>${r.percentage}%</h1><p class="lead">${esc(topic?.title || 'Thema')} · ${r.score}/${r.total} richtig</p><div class="progress"><i style="width:${r.percentage}%"></i></div><div class="actions"><button class="btn primary" data-route="solutions">Lösungen ansehen</button><button class="btn secondary" data-quiz="${esc(r.topic)}">Neues Quiz</button><button class="btn secondary" data-topic="${esc(r.topic)}">Zum Thema</button></div></section><section class="panel"><div class="head"><div><p class="eyebrow">Kurzfeedback</p><h2>Was du wiederholen solltest</h2><p class="lead">Die detaillierten Lösungen sind bewusst separat, damit das Ergebnis übersichtlich bleibt.</p></div></div><div class="grid">${r.details.slice(0, 4).map((item) => `<article class="card"><span class="badge ${item.correct ? 'ok' : 'warn'}">${item.correct ? 'Richtig' : 'Wiederholen'}</span><h3>${esc(item.question)}</h3><p>${esc(item.recommendation)}</p></article>`).join('')}</div></section>`;
+  }
+
+  function solutionsView() {
+    const r = state.result;
+    if (!r) return `<section class="empty"><h2>Noch keine Lösungen verfügbar</h2><p>Schließe zuerst ein Quiz ab. Danach kannst du hier die Lösungen separat ansehen.</p><div class="actions"><button class="btn primary" data-route="topics">Quiz starten</button></div></section>`;
+    const topic = by(tList(), r.topic);
+    return `<section class="panel"><div class="head"><div><p class="eyebrow">Quiz-Lösungen</p><h2>${esc(topic?.title || 'Letztes Quiz')}</h2><p class="lead">Vergleiche deine Antworten mit der richtigen Lösung und lies die Erklärung pro Frage.</p></div><div class="badges"><span class="badge ${r.percentage >= 80 ? 'ok' : 'warn'}">${r.percentage}% Ergebnis</span><span class="badge">${r.score}/${r.total} richtig</span></div></div><div class="actions"><button class="btn primary" data-quiz="${esc(r.topic)}">Neues Quiz</button><button class="btn secondary" data-route="result">Zur Auswertung</button><button class="btn secondary" data-topic="${esc(r.topic)}">Zum Thema</button></div></section><section class="panel"><div class="grid">${r.details.map((item, index) => `<article class="card"><div class="badges"><span class="badge ${item.correct ? 'ok' : 'warn'}">${item.correct ? 'Richtig' : 'Korrektur'}</span><span class="badge">Frage ${index + 1}</span></div><h3>${esc(item.question)}</h3><div class="meta"><div class="row"><span>Deine Antwort</span><strong>${esc(item.selectedAnswer)}</strong></div><div class="row"><span>Richtige Antwort</span><strong>${esc(item.correctAnswer)}</strong></div></div><div class="choices">${item.options.map((option, optionIndex) => `<div class="choice ${optionIndex === item.correctIndex ? 'selected' : ''}">${optionIndex === item.correctIndex ? '✓ ' : optionIndex === item.selectedIndex ? 'Deine Wahl: ' : ''}${esc(option)}</div>`).join('')}</div><p>${esc(item.recommendation)}</p></article>`).join('')}</div></section>`;
   }
 
   function profileView() {
-    return `<section class="panel"><div class="head"><div><p class="eyebrow">Profil & Datenbank</p><h2>Teststatus</h2><p class="lead">Content kommt aus Supabase. Nutzerfortschritt ist aktuell noch lokaler Testzustand.</p></div><button class="btn secondary" data-refresh>DB neu laden</button></div><div class="grid two"><article class="card"><h3>Supabase</h3><div class="meta"><div class="row"><span>Status</span><strong>${esc(db.state)}</strong></div><div class="row"><span>Themen</span><strong>${db.counts.topics}</strong></div><div class="row"><span>Lektionen</span><strong>${db.counts.lessons}</strong></div><div class="row"><span>Fragen</span><strong>${db.counts.questions}</strong></div><div class="row"><span>Optionen</span><strong>${db.counts.options}</strong></div></div><p>${esc(db.message)}</p></article><article class="card"><h3>Session</h3><div class="meta"><div class="row"><span>XP</span><strong>${state.xp || 0}</strong></div><div class="row"><span>Level</span><strong>${state.level || 1}</strong></div><div class="row"><span>Streak</span><strong>${state.streak || 0}</strong></div><div class="row"><span>Quizversuche</span><strong>${state.attempts.length}</strong></div></div><button class="btn secondary" data-reset>Lokalen Testfortschritt zurücksetzen</button></article></div></section>`;
+    return `<section class="panel"><div class="head"><div><p class="eyebrow">Profil & Datenbank</p><h2>Teststatus</h2><p class="lead">Content kommt aus Supabase. Nutzerfortschritt ist aktuell noch lokaler Testzustand.</p></div><button class="btn secondary" data-refresh>DB neu laden</button></div><div class="grid two"><article class="card"><h3>Supabase</h3><div class="meta"><div class="row"><span>Status</span><strong>${esc(db.state)}</strong></div><div class="row"><span>Themen</span><strong>${db.counts.topics}</strong></div><div class="row"><span>Lektionen</span><strong>${db.counts.lessons}</strong></div><div class="row"><span>Fragen</span><strong>${db.counts.questions}</strong></div><div class="row"><span>Optionen</span><strong>${db.counts.options}</strong></div></div><p>${esc(db.message)}</p></article><article class="card"><h3>Session</h3><div class="meta"><div class="row"><span>XP</span><strong>${state.xp || 0}</strong></div><div class="row"><span>Level</span><strong>${state.level || 1}</strong></div><div class="row"><span>Streak</span><strong>${state.streak || 0}</strong></div><div class="row"><span>Quizversuche</span><strong>${state.attempts.length}</strong></div></div><div class="actions">${state.result ? '<button class="btn secondary" data-route="solutions">Letzte Lösungen ansehen</button>' : ''}<button class="btn secondary" data-reset>Lokalen Testfortschritt zurücksetzen</button></div></article></div></section>`;
   }
 
   function render() {
     setDbButton();
-    const routes = { dashboard, topics: topicsView, topic: topicView, lesson: lessonView, quiz: quizView, result: resultView, profile: profileView };
+    const routes = { dashboard, topics: topicsView, topic: topicView, lesson: lessonView, quiz: quizView, result: resultView, solutions: solutionsView, profile: profileView };
     app.innerHTML = (routes[state.route] || dashboard)();
   }
 
