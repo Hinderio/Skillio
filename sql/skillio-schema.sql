@@ -56,5 +56,8 @@ drop policy if exists "insert own events" on skillio.learning_events;
 create policy "insert own events" on skillio.learning_events for insert with check (auth.uid() = user_id);
 
 insert into skillio.learning_categories (id,title,subtitle,status)
-values ('change-management','Change Management','Business Transformation, Adoption und Data-Mesh-Transfer.','active')
+values
+  ('skillio-app','Skillio App State','Gesamter Lernstand über alle Module','active'),
+  ('change-management','Change Management','Business Transformation, Adoption und Data-Mesh-Transfer','active'),
+  ('bullshit-bingo','Bullshit Bingo','IT- und Management-Buzzwords entlarven','active')
 on conflict (id) do update set title=excluded.title, subtitle=excluded.subtitle, status=excluded.status, updated_at=now();
