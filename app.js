@@ -2,14 +2,20 @@
   const app = document.getElementById('app');
   const toast = document.getElementById('toast');
   const dbStatus = document.getElementById('dbStatus');
-  const KEY = 'skillio:session:v2';
-  const QUIZ_SIZE = 12;
+  const KEY = 'skillio:session:v3';
+  const TOPIC_QUIZ_SIZE = 12;
+  const MODULE_QUIZ_LIMIT = 60;
 
   let content = { topics: [], lessons: [], questions: [] };
   let db = { state: 'loading', message: 'Supabase wird verbunden', loadedAt: null, counts: { topics: 0, lessons: 0, questions: 0, options: 0 } };
   let state = { route: 'dashboard', topic: 'change-management', lesson: null, quiz: null, result: null, progress: [], attempts: [], xp: 0, level: 1, streak: 0 };
 
-  try { state = { ...state, ...JSON.parse(sessionStorage.getItem(KEY) || '{}') }; } catch { sessionStorage.removeItem(KEY); }
+  try {
+    state = { ...state, ...JSON.parse(sessionStorage.getItem(KEY) || sessionStorage.getItem('skillio:session:v2') || '{}') };
+  } catch {
+    sessionStorage.removeItem(KEY);
+  }
+
   const hash = location.hash.replace('#', '');
   if (['dashboard', 'topics', 'topic', 'lesson', 'quiz', 'result', 'solutions', 'profile'].includes(hash)) state.route = hash;
 
@@ -20,6 +26,7 @@
   const tList = () => content.topics;
   const lList = (topic) => content.lessons.filter((lesson) => lesson.topic === topic);
   const qList = (topic) => content.questions.filter((question) => question.topic === topic);
+  const moduleQuestionList = (topic, module) => qList(topic).filter((question) => question.module === module);
 
   function notify(message) {
     toast.textContent = message;
@@ -68,20 +75,48 @@
   }
 
   function mapLesson(row) {
-    const body = String(row.content_md || row.description || row.title).split(/\n{2,}|\n|(?<=\.)\s+(?=[A-ZÄÖÜ])/).map(compact).filter(Boolean);
-    return { id: row.id, topic: row.topic_id, module: row.module_id || row.id, title: row.title, desc: row.description || row.learning_goal || '', body: body.length ? body : [row.title], rule: row.learning_goal || 'Wende das Gelernte in einer konkreten Entscheidungssituation an.', xp: Number(row.xp_reward || 30), position: Number(row.position || 0) };
+    const body = String(row.content_md || row.description || row.title)
+      .split(/\n{2,}|\n|(?<=\.)\s+(?=[A-ZÄÖÜ])/)
+      .map(compact)
+      .filter(Boolean);
+
+    return {
+      id: row.id,
+      topic: row.topic_id,
+      module: row.module_id || row.id,
+      title: row.title,
+      desc: row.description || row.learning_goal || '',
+      body: body.length ? body : [row.title],
+      rule: row.learning_goal || 'Wende das Gelernte in einer konkreten Entscheidungssituation an.',
+      xp: Number(row.xp_reward || 30),
+      position: Number(row.position || 0)
+    };
   }
 
   function mapQuestions(questionRows, optionRows) {
     const grouped = new Map();
-    optionRows.slice().sort((a, b) => String(a.question_id).localeCompare(String(b.question_id)) || Number(a.position || 0) - Number(b.position || 0)).forEach((option) => {
-      const options = grouped.get(option.question_id) || [];
-      options.push({ text: option.option_text, correct: option.is_correct === true });
-      grouped.set(option.question_id, options);
-    });
+    optionRows
+      .slice()
+      .sort((a, b) => String(a.question_id).localeCompare(String(b.question_id)) || Number(a.position || 0) - Number(b.position || 0))
+      .forEach((option) => {
+        const options = grouped.get(option.question_id) || [];
+        options.push({ text: option.option_text, correct: option.is_correct === true });
+        grouped.set(option.question_id, options);
+      });
+
     return questionRows.map((row) => {
       const options = grouped.get(row.id) || [];
-      return { id: row.id, topic: row.topic_id, module: row.module_id || '', q: row.question_text, o: options.map((option) => option.text), a: Math.max(0, options.findIndex((option) => option.correct)), ex: row.explanation || row.recommendation || 'Wiederhole die passende Lektion und prüfe die Begründung.', difficulty: row.difficulty || '', position: Number(row.position || 0) };
+      return {
+        id: row.id,
+        topic: row.topic_id,
+        module: row.module_id || '',
+        q: row.question_text,
+        o: options.map((option) => option.text),
+        a: Math.max(0, options.findIndex((option) => option.correct)),
+        ex: row.explanation || row.recommendation || 'Wiederhole die passende Lektion und prüfe die Begründung.',
+        difficulty: row.difficulty || '',
+        position: Number(row.position || 0)
+      };
     }).filter((question) => question.o.length >= 2);
   }
 
@@ -114,13 +149,19 @@
       };
 
       if (!content.topics.some((topic) => topic.id === state.topic)) state.topic = content.topics[0]?.id || 'change-management';
-      db = { state: content.questions.length ? 'ready' : 'empty', message: content.questions.length ? 'Supabase Content geladen' : 'Supabase ist verbunden, aber keine Fragen wurden gefunden.', loadedAt: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }), counts: { topics: content.topics.length, lessons: content.lessons.length, questions: content.questions.length, options: options.length } };
+      db = {
+        state: content.questions.length ? 'ready' : 'empty',
+        message: content.questions.length ? 'Supabase Content geladen' : 'Supabase ist verbunden, aber keine Fragen wurden gefunden.',
+        loadedAt: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+        counts: { topics: content.topics.length, lessons: content.lessons.length, questions: content.questions.length, options: options.length }
+      };
       save();
       notify(content.questions.length ? `${content.questions.length} Fragen aus Supabase geladen` : 'DB verbunden, aber keine Fragen gefunden');
     } catch (error) {
       content = { topics: [], lessons: [], questions: [] };
       db = { ...db, state: 'error', message: error.message || 'Supabase konnte nicht geladen werden.' };
     }
+
     setDbButton();
     render();
   }
@@ -128,10 +169,18 @@
   function modules(topicId) {
     const map = new Map();
     lList(topicId).forEach((lesson) => {
-      if (!map.has(lesson.module)) map.set(lesson.module, { id: lesson.module, title: lesson.title.replace(/^Change Management:\s*|^IT Bullshit Bingo:\s*/i, ''), desc: lesson.desc, firstLesson: lesson.id, count: 0 });
+      if (!map.has(lesson.module)) {
+        map.set(lesson.module, {
+          id: lesson.module,
+          title: lesson.title.replace(/^Change Management:\s*|^IT Bullshit Bingo:\s*/i, ''),
+          desc: lesson.desc,
+          firstLesson: lesson.id,
+          count: 0
+        });
+      }
       map.get(lesson.module).count += 1;
     });
-    return [...map.values()];
+    return [...map.values()].map((module) => ({ ...module, questions: moduleQuestionList(topicId, module.id).length }));
   }
 
   function stats(topicId) {
@@ -171,13 +220,19 @@
     render();
   }
 
-  function sample(topicId) {
-    const pool = qList(topicId).slice();
+  function shuffled(items) {
+    const pool = items.slice();
     for (let i = pool.length - 1; i > 0; i -= 1) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    return pool.slice(0, Math.min(QUIZ_SIZE, pool.length)).map((q) => q.id);
+    return pool;
+  }
+
+  function pickQuestionIds(topicId, moduleId = null) {
+    const source = moduleId ? moduleQuestionList(topicId, moduleId) : qList(topicId);
+    const limit = moduleId ? Math.min(MODULE_QUIZ_LIMIT, source.length) : Math.min(TOPIC_QUIZ_SIZE, source.length);
+    return shuffled(source).slice(0, limit).map((q) => q.id);
   }
 
   function currentQuiz() {
@@ -185,10 +240,10 @@
     return (state.quiz.ids || []).map((id) => by(content.questions, id)).filter(Boolean);
   }
 
-  function startQuiz(topicId) {
-    const ids = sample(topicId);
-    if (!ids.length) return notify('Für dieses Thema sind keine Fragen geladen.');
-    state.quiz = { topic: topicId, i: 0, ids, answers: [] };
+  function startQuiz(topicId, moduleId = null) {
+    const ids = pickQuestionIds(topicId, moduleId);
+    if (!ids.length) return notify('Für diesen Bereich sind keine Fragen geladen.');
+    state.quiz = { topic: topicId, module: moduleId, i: 0, ids, answers: [], mode: moduleId ? 'module' : 'topic' };
     state.result = null;
     go('quiz');
   }
@@ -202,6 +257,7 @@
       render();
       return;
     }
+
     const details = list.map((q, i) => {
       const selectedIndex = state.quiz.answers[i];
       return {
@@ -221,11 +277,24 @@
     state.xp += score * 12 + (percentage >= 80 ? 30 : 0);
     state.level = Math.floor(state.xp / 250) + 1;
     state.streak = Math.max(1, state.streak);
-    state.result = { topic: state.quiz.topic, score, total: list.length, percentage, details, completedAt: new Date().toISOString() };
-    state.attempts.unshift({ topic: state.quiz.topic, percentage, score, total: list.length, date: state.result.completedAt });
+    state.result = { topic: state.quiz.topic, module: state.quiz.module, mode: state.quiz.mode, score, total: list.length, percentage, details, completedAt: new Date().toISOString() };
+    state.attempts.unshift({ topic: state.quiz.topic, module: state.quiz.module, percentage, score, total: list.length, date: state.result.completedAt });
     state.quiz = null;
     save();
     go('result');
+  }
+
+  function questionCard(question, index) {
+    const correctAnswer = question.o[question.a] || 'Keine Lösung markiert';
+    return `<details class="card study-card"><summary><span class="badge info">Frage ${index + 1}</span><strong>${esc(question.q)}</strong></summary><div class="meta"><div class="row"><span>Richtige Antwort</span><strong>${esc(correctAnswer)}</strong></div>${question.difficulty ? `<div class="row"><span>Level</span><strong>${esc(question.difficulty)}</strong></div>` : ''}</div><div class="choices">${question.o.map((option, optionIndex) => `<div class="choice ${optionIndex === question.a ? 'selected' : ''}">${optionIndex === question.a ? '✓ ' : ''}${esc(option)}</div>`).join('')}</div><p>${esc(question.ex)}</p></details>`;
+  }
+
+  function lessonStudyPanel(lesson) {
+    const questions = moduleQuestionList(lesson.topic, lesson.module);
+    if (!questions.length) {
+      return `<section class="panel"><div class="head"><div><p class="eyebrow">Fragenkatalog</p><h2>Noch keine Fragen für dieses Modul</h2><p class="lead">Prüfe den Import oder die module_id in Supabase.</p></div></div></section>`;
+    }
+    return `<section class="panel"><div class="head"><div><p class="eyebrow">Theorie & Fragenkatalog</p><h2>${questions.length} Fragen mit Lösungen</h2><p class="lead">Nutze diesen Bereich zum Lernen vor dem Quiz. Jede Frage lässt sich einzeln öffnen und zeigt Lösung, Antwortoptionen und Erklärung.</p></div><div class="badges"><span class="badge info">${questions.length} Fragen</span><span class="badge">Modul ${esc(lesson.module)}</span></div></div><div class="actions"><button class="btn primary" data-module-quiz="${esc(lesson.module)}" data-topic-id="${esc(lesson.topic)}">Quiz mit ${questions.length} Fragen starten</button><button class="btn secondary" data-topic="${esc(lesson.topic)}">Zum Thema</button></div><div class="grid">${questions.map(questionCard).join('')}</div></section>`;
   }
 
   function statusPanel() {
@@ -241,7 +310,7 @@
 
   function metrics() {
     const o = overall();
-    return `<section class="metrics"><article class="metric"><small>Gesamtfortschritt</small><strong>${o.progress}%</strong><p>lokaler Testfortschritt</p></article><article class="metric"><small>XP & Level</small><strong>${state.xp || 0} XP</strong><p>Level ${state.level || 1}</p></article><article class="metric"><small>Fragen aus Supabase</small><strong>${db.counts.questions}</strong><p>${db.state === 'ready' ? 'live geladen' : esc(db.message)}</p></article><article class="metric"><small>Quizmodus</small><strong>${QUIZ_SIZE}</strong><p>Fragen pro Session</p></article></section>`;
+    return `<section class="metrics"><article class="metric"><small>Gesamtfortschritt</small><strong>${o.progress}%</strong><p>lokaler Testfortschritt</p></article><article class="metric"><small>XP & Level</small><strong>${state.xp || 0} XP</strong><p>Level ${state.level || 1}</p></article><article class="metric"><small>Fragen aus Supabase</small><strong>${db.counts.questions}</strong><p>${db.state === 'ready' ? 'live geladen' : esc(db.message)}</p></article><article class="metric"><small>Topic-Quiz</small><strong>${TOPIC_QUIZ_SIZE}</strong><p>Fragen pro Session</p></article></section>`;
   }
 
   function dashboard() {
@@ -260,15 +329,17 @@
     if (!topic) return dashboard();
     const st = stats(topic.id);
     const mods = modules(topic.id);
-    return `<section class="panel"><div class="head"><div><p class="eyebrow">Themen-Detailseite</p><h2>${esc(topic.title)}</h2><p class="lead">${esc(topic.desc)}</p></div><div class="badges"><span class="badge info">${st.progress}% Fortschritt</span><span class="badge">${st.questions} Fragen</span></div></div><div class="progress"><i style="width:${st.progress}%"></i></div><div class="actions"><button class="btn primary" data-start="${esc(topic.id)}">Lektion starten</button><button class="btn secondary" data-quiz="${esc(topic.id)}">Quiz starten</button>${state.result?.topic === topic.id ? `<button class="btn secondary" data-route="solutions">Letzte Lösungen</button>` : ''}</div></section><section class="panel"><div class="head"><div><p class="eyebrow">Module aus Supabase</p><h2>Lernstruktur</h2></div></div><div class="grid">${mods.map((m) => `<article class="module"><div><h3>${esc(m.title)}</h3><p>${esc(m.desc)}</p><small>${m.count} Lerneinheit${m.count === 1 ? '' : 'en'}</small></div><button class="btn secondary" data-lesson="${esc(m.firstLesson)}">Öffnen</button></article>`).join('')}</div></section>`;
+    return `<section class="panel"><div class="head"><div><p class="eyebrow">Themen-Detailseite</p><h2>${esc(topic.title)}</h2><p class="lead">${esc(topic.desc)}</p></div><div class="badges"><span class="badge info">${st.progress}% Fortschritt</span><span class="badge">${st.questions} Fragen</span></div></div><div class="progress"><i style="width:${st.progress}%"></i></div><div class="actions"><button class="btn primary" data-start="${esc(topic.id)}">Lektion starten</button><button class="btn secondary" data-quiz="${esc(topic.id)}">Topic-Quiz starten</button>${state.result?.topic === topic.id ? `<button class="btn secondary" data-route="solutions">Letzte Lösungen</button>` : ''}</div></section><section class="panel"><div class="head"><div><p class="eyebrow">Module aus Supabase</p><h2>Lernstruktur</h2></div></div><div class="grid">${mods.map((m) => `<article class="module"><div><h3>${esc(m.title)}</h3><p>${esc(m.desc)}</p><small>${m.count} Lerneinheit${m.count === 1 ? '' : 'en'} · ${m.questions} Fragen</small></div><div class="actions"><button class="btn secondary" data-lesson="${esc(m.firstLesson)}">Lernen</button><button class="btn primary" data-module-quiz="${esc(m.id)}" data-topic-id="${esc(topic.id)}">${m.questions} Fragen Quiz</button></div></article>`).join('')}</div></section>`;
   }
 
   function lessonView() {
     const list = lList(state.topic);
     const lesson = by(list, state.lesson) || list[0];
     if (!lesson) return '<section class="empty">Keine Lektionen vorhanden.</section>';
+    const questions = moduleQuestionList(lesson.topic, lesson.module);
     const done = state.progress.some((item) => item.lesson === lesson.id);
-    return `<section class="learn"><aside class="side">${list.map((l) => `<button class="${l.id === lesson.id ? 'active' : ''}" data-lesson="${esc(l.id)}"><small>${state.progress.some((p) => p.lesson === l.id) ? 'Abgeschlossen' : 'Lektion'}</small><strong>${esc(l.title)}</strong><span>${esc(l.desc)}</span></button>`).join('')}</aside><article class="lesson"><p class="eyebrow">Lektion aus Supabase</p><h1>${esc(lesson.title)}</h1><div class="body">${lesson.body.map((p) => `<p>${esc(p)}</p>`).join('')}<blockquote>${esc(lesson.rule)}</blockquote></div><div class="actions"><button class="btn secondary" data-topic="${esc(lesson.topic)}">Zurück</button><button class="btn primary" data-complete="${esc(lesson.id)}" ${done ? 'disabled' : ''}>${done ? 'Abgeschlossen' : 'Als abgeschlossen markieren'}</button></div></article></section>`;
+    const lessonShell = `<section class="learn"><aside class="side">${list.map((l) => `<button class="${l.id === lesson.id ? 'active' : ''}" data-lesson="${esc(l.id)}"><small>Lektion</small><strong>${esc(l.title)}</strong><span>${moduleQuestionList(l.topic, l.module).length} Fragen · ${state.progress.some((p) => p.lesson === l.id) ? 'abgeschlossen' : 'offen'}</span></button>`).join('')}</aside><article class="lesson"><p class="eyebrow">Lektion aus Supabase</p><h1>${esc(lesson.title)}</h1><div class="body">${lesson.body.map((p) => `<p>${esc(p)}</p>`).join('')}<blockquote>${esc(lesson.rule)}</blockquote></div><div class="actions"><button class="btn primary" data-module-quiz="${esc(lesson.module)}" data-topic-id="${esc(lesson.topic)}">Quiz mit ${questions.length} Fragen starten</button><button class="btn secondary" data-complete="${esc(lesson.id)}" ${done ? 'disabled' : ''}>${done ? 'Abgeschlossen' : 'Als abgeschlossen markieren'}</button><button class="btn secondary" data-topic="${esc(lesson.topic)}">Zurück</button></div></article></section>`;
+    return lessonShell + lessonStudyPanel(lesson);
   }
 
   function quizView() {
@@ -276,21 +347,23 @@
     if (!state.quiz || !list.length) return '<section class="empty">Kein Quiz aktiv oder keine Fragen geladen.</section>';
     const q = list[state.quiz.i] || list[0];
     const selected = state.quiz.answers[state.quiz.i];
-    return `<section class="quiz"><p class="eyebrow">Supabase Quiz · Frage ${state.quiz.i + 1} von ${list.length}</p><div class="question">${esc(q.q)}</div><div class="choices">${q.o.map((option, i) => `<button class="choice ${selected === i ? 'selected' : ''}" data-choice="${i}">${esc(option)}</button>`).join('')}</div><div class="actions"><button class="btn secondary" data-topic="${esc(state.quiz.topic)}">Abbrechen</button><button class="btn primary" data-next ${selected === undefined ? 'disabled' : ''}>${state.quiz.i === list.length - 1 ? 'Auswerten' : 'Weiter'}</button></div></section>`;
+    const quizType = state.quiz.mode === 'module' ? 'Modul-Quiz' : 'Topic-Quiz';
+    return `<section class="quiz"><p class="eyebrow">${quizType} · Frage ${state.quiz.i + 1} von ${list.length}</p><div class="question">${esc(q.q)}</div><div class="choices">${q.o.map((option, i) => `<button class="choice ${selected === i ? 'selected' : ''}" data-choice="${i}">${esc(option)}</button>`).join('')}</div><div class="actions"><button class="btn secondary" data-topic="${esc(state.quiz.topic)}">Abbrechen</button><button class="btn primary" data-next ${selected === undefined ? 'disabled' : ''}>${state.quiz.i === list.length - 1 ? 'Auswerten' : 'Weiter'}</button></div></section>`;
   }
 
   function resultView() {
     const r = state.result;
     if (!r) return '<section class="empty">Noch kein Ergebnis vorhanden.</section>';
     const topic = by(tList(), r.topic);
-    return `<section class="panel result"><p class="eyebrow">Quiz Ergebnis</p><h1>${r.percentage}%</h1><p class="lead">${esc(topic?.title || 'Thema')} · ${r.score}/${r.total} richtig</p><div class="progress"><i style="width:${r.percentage}%"></i></div><div class="actions"><button class="btn primary" data-route="solutions">Lösungen ansehen</button><button class="btn secondary" data-quiz="${esc(r.topic)}">Neues Quiz</button><button class="btn secondary" data-topic="${esc(r.topic)}">Zum Thema</button></div></section><section class="panel"><div class="head"><div><p class="eyebrow">Kurzfeedback</p><h2>Was du wiederholen solltest</h2><p class="lead">Die detaillierten Lösungen sind bewusst separat, damit das Ergebnis übersichtlich bleibt.</p></div></div><div class="grid">${r.details.slice(0, 4).map((item) => `<article class="card"><span class="badge ${item.correct ? 'ok' : 'warn'}">${item.correct ? 'Richtig' : 'Wiederholen'}</span><h3>${esc(item.question)}</h3><p>${esc(item.recommendation)}</p></article>`).join('')}</div></section>`;
+    const label = r.mode === 'module' ? 'Modul-Quiz' : 'Topic-Quiz';
+    return `<section class="panel result"><p class="eyebrow">${label} Ergebnis</p><h1>${r.percentage}%</h1><p class="lead">${esc(topic?.title || 'Thema')} · ${r.score}/${r.total} richtig</p><div class="progress"><i style="width:${r.percentage}%"></i></div><div class="actions"><button class="btn primary" data-route="solutions">Lösungen ansehen</button><button class="btn secondary" data-retry-last>Gleiches Modul neu</button><button class="btn secondary" data-topic="${esc(r.topic)}">Zum Thema</button></div></section><section class="panel"><div class="head"><div><p class="eyebrow">Kurzfeedback</p><h2>Was du wiederholen solltest</h2><p class="lead">Die detaillierten Lösungen sind separat, damit das Ergebnis übersichtlich bleibt.</p></div></div><div class="grid">${r.details.slice(0, 4).map((item) => `<article class="card"><span class="badge ${item.correct ? 'ok' : 'warn'}">${item.correct ? 'Richtig' : 'Wiederholen'}</span><h3>${esc(item.question)}</h3><p>${esc(item.recommendation)}</p></article>`).join('')}</div></section>`;
   }
 
   function solutionsView() {
     const r = state.result;
     if (!r) return `<section class="empty"><h2>Noch keine Lösungen verfügbar</h2><p>Schließe zuerst ein Quiz ab. Danach kannst du hier die Lösungen separat ansehen.</p><div class="actions"><button class="btn primary" data-route="topics">Quiz starten</button></div></section>`;
     const topic = by(tList(), r.topic);
-    return `<section class="panel"><div class="head"><div><p class="eyebrow">Quiz-Lösungen</p><h2>${esc(topic?.title || 'Letztes Quiz')}</h2><p class="lead">Vergleiche deine Antworten mit der richtigen Lösung und lies die Erklärung pro Frage.</p></div><div class="badges"><span class="badge ${r.percentage >= 80 ? 'ok' : 'warn'}">${r.percentage}% Ergebnis</span><span class="badge">${r.score}/${r.total} richtig</span></div></div><div class="actions"><button class="btn primary" data-quiz="${esc(r.topic)}">Neues Quiz</button><button class="btn secondary" data-route="result">Zur Auswertung</button><button class="btn secondary" data-topic="${esc(r.topic)}">Zum Thema</button></div></section><section class="panel"><div class="grid">${r.details.map((item, index) => `<article class="card"><div class="badges"><span class="badge ${item.correct ? 'ok' : 'warn'}">${item.correct ? 'Richtig' : 'Korrektur'}</span><span class="badge">Frage ${index + 1}</span></div><h3>${esc(item.question)}</h3><div class="meta"><div class="row"><span>Deine Antwort</span><strong>${esc(item.selectedAnswer)}</strong></div><div class="row"><span>Richtige Antwort</span><strong>${esc(item.correctAnswer)}</strong></div></div><div class="choices">${item.options.map((option, optionIndex) => `<div class="choice ${optionIndex === item.correctIndex ? 'selected' : ''}">${optionIndex === item.correctIndex ? '✓ ' : optionIndex === item.selectedIndex ? 'Deine Wahl: ' : ''}${esc(option)}</div>`).join('')}</div><p>${esc(item.recommendation)}</p></article>`).join('')}</div></section>`;
+    return `<section class="panel"><div class="head"><div><p class="eyebrow">Quiz-Lösungen</p><h2>${esc(topic?.title || 'Letztes Quiz')}</h2><p class="lead">Vergleiche deine Antworten mit der richtigen Lösung und lies die Erklärung pro Frage.</p></div><div class="badges"><span class="badge ${r.percentage >= 80 ? 'ok' : 'warn'}">${r.percentage}% Ergebnis</span><span class="badge">${r.score}/${r.total} richtig</span></div></div><div class="actions"><button class="btn primary" data-retry-last>Gleiches Modul neu</button><button class="btn secondary" data-route="result">Zur Auswertung</button><button class="btn secondary" data-topic="${esc(r.topic)}">Zum Thema</button></div></section><section class="panel"><div class="grid">${r.details.map((item, index) => `<article class="card"><div class="badges"><span class="badge ${item.correct ? 'ok' : 'warn'}">${item.correct ? 'Richtig' : 'Korrektur'}</span><span class="badge">Frage ${index + 1}</span></div><h3>${esc(item.question)}</h3><div class="meta"><div class="row"><span>Deine Antwort</span><strong>${esc(item.selectedAnswer)}</strong></div><div class="row"><span>Richtige Antwort</span><strong>${esc(item.correctAnswer)}</strong></div></div><div class="choices">${item.options.map((option, optionIndex) => `<div class="choice ${optionIndex === item.correctIndex ? 'selected' : ''}">${optionIndex === item.correctIndex ? '✓ ' : optionIndex === item.selectedIndex ? 'Deine Wahl: ' : ''}${esc(option)}</div>`).join('')}</div><p>${esc(item.recommendation)}</p></article>`).join('')}</div></section>`;
   }
 
   function profileView() {
@@ -312,6 +385,8 @@
     if (target.matches('[data-refresh]')) return loadContent();
     if (target.matches('[data-reset]')) { state.progress = []; state.attempts = []; state.xp = 0; state.level = 1; state.streak = 0; state.quiz = null; state.result = null; save(); notify('Lokaler Testfortschritt zurückgesetzt'); render(); return; }
     if (target.matches('[data-start]')) { const first = lList(target.dataset.start)[0]; return first ? go('lesson', { topic: target.dataset.start, lesson: first.id }) : notify('Keine Lektion gefunden.'); }
+    if (target.matches('[data-module-quiz]')) return startQuiz(target.dataset.topicId, target.dataset.moduleQuiz);
+    if (target.matches('[data-retry-last]')) return state.result ? startQuiz(state.result.topic, state.result.module || null) : notify('Noch kein Quiz abgeschlossen.');
     if (target.matches('[data-quiz]')) return startQuiz(target.dataset.quiz);
     if (target.matches('[data-lesson]')) { const lesson = by(content.lessons, target.dataset.lesson); if (lesson) return go('lesson', { topic: lesson.topic, lesson: lesson.id }); }
     if (target.matches('[data-topic]')) return go('topic', { topic: target.dataset.topic });
