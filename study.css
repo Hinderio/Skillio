@@ -21,7 +21,8 @@ details.study-card > summary strong {
   letter-spacing: -0.035em;
 }
 
-details.study-card > :not(summary) {
+details.study-card > :not(summary),
+details.study-card:not([open]) > :not(summary) {
   display: block;
 }
 
